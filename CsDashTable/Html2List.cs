@@ -7,34 +7,6 @@ using System.Threading.Tasks;
 
 namespace CsDashTable
 {
-
-    public abstract class Span
-    {
-        public int Index { get; set; }
-        public int Value { get; set; }
-    }
-
-    public class Rowspan : Span { }
-
-    public class Colspan : Span { }
-
-
-    public class Cell
-    {
-        public string Text { get; set; }
-        public Rowspan Rowspan { get; set; }
-        public Colspan Colspan { get; set; }
-    }
-
-    public class SpanCell
-    {
-        public string Text { get; set; }
-        public Tuple<int,int> Position { get; set; }
-        public int ColspanIndex { get; set; }
-        public int RowspanIndex { get; set; }
-    }
-
-
     public class Html2List
     {
         private const string table = "table";
@@ -42,8 +14,6 @@ namespace CsDashTable
         private const string td = "td";
         private const string rowspan = "rowspan";
         private const string colspan = "colspan";
-
-
 
         private bool existsAlready(int idx_row, int idx_col, List<SpanCell> spanList)
         {
@@ -189,7 +159,7 @@ namespace CsDashTable
                         colspanIndex++;
                         rowspanIndex++;
                     }
-                    else if(cell.Rowspan.Value != 0)
+                    else if(cell.Rowspan.Index != 0)
                     {
                         spanCellList.Add(createSpanCell(cell.Text, currentIdxRow, currentIdxCol, 0, rowspanIndex));
                         foreach (int rspanNb in Enumerable.Range(0, cell.Rowspan.Value -1))
@@ -199,7 +169,7 @@ namespace CsDashTable
                         }
                         rowspanIndex++;
                     }
-                    else if(cell.Colspan.Value != 0)
+                    else if(cell.Colspan.Index != 0)
                     {
                         spanCellList.Add(createSpanCell(cell.Text, currentIdxRow, currentIdxCol, colspanIndex, 0));
                         foreach (int cspanValue in Enumerable.Range(0, cell.Colspan.Value - 1))
@@ -219,8 +189,42 @@ namespace CsDashTable
             return spanCellList.OrderBy(cell => cell.Position).ToList();
         }
 
+        private Tuple<NegativeIndexList<List<string>>, NegativeIndexList<List<int>>, NegativeIndexList<List<int>>> 
+            createFinalResult(List<SpanCell> spancellList)
+        {
+            // data structure
+            // datalist = [["t1","t2".."tN"], [],[],[]..[]]
+            // rowspan_list = [[ri1,ri2..riN],[],[],[]..[]]
+            // colspan_list = [[ci1,ci2..ciN],[],[],[]..[]]
 
-        public void Create(string htmlString)
+            var datalist = new NegativeIndexList<List<string>>();
+            var rowspan = new NegativeIndexList<List<int>>();
+            var colspan = new NegativeIndexList<List<int>>();
+
+            datalist[-1] = new List<string>();
+            rowspan[-1] = new List<int>();
+            colspan[-1] = new List<int>();
+
+            int idx_row = -1;
+            foreach (var cell in spancellList)
+            {
+                if(idx_row != cell.Position.Item1)
+                {
+                    datalist.Add(new List<string>());
+                    rowspan.Add(new List<int>());
+                    colspan.Add(new List<int>());
+                    idx_row++;
+                }
+                datalist[-1].Add(cell.Text);
+                rowspan[-1].Add(cell.RowspanIndex);
+                colspan[-1].Add(cell.ColspanIndex);
+
+            }
+            return Tuple.Create(datalist, rowspan, colspan);
+        }
+
+
+        public Tuple<NegativeIndexList<List<string>>, NegativeIndexList<List<int>>, NegativeIndexList<List<int>>> Create(string htmlString)
         {
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(htmlString);
@@ -228,7 +232,9 @@ namespace CsDashTable
 
             var allRows = tableElem.Descendants(tr).ToArray();
             var tableRepresentation = createTableRepresentation(allRows);
-
+            var spancellList = createSpanCellList(tableRepresentation);
+            var returnResult = createFinalResult(spancellList);
+            return returnResult;
         }
 
 
